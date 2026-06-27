@@ -11,7 +11,7 @@ metadata:
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  backoffLimit: 3
+  backoffLimit: 6
   template:
     metadata:
       labels:
@@ -20,6 +20,32 @@ spec:
       restartPolicy: Never
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        # Block until Postgres accepts TCP — CNPG bootstrap takes ~60-90s and
+        # would otherwise race the migration.
+        - name: wait-for-db
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - python
+            - -c
+            - |
+              import os, socket, sys, time
+              host = os.environ["POSTGRES_HOST"]
+              port = int(os.environ.get("POSTGRES_PORT", "5432"))
+              for _ in range(150):
+                  try:
+                      socket.create_connection((host, port), 2).close()
+                      print("database is up"); sys.exit(0)
+                  except OSError as exc:
+                      print("waiting for database:", exc); time.sleep(2)
+              sys.exit("timed out waiting for database")
+          env:
+            {{- include "svc.dbEnv" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- end }}
       containers:
         - name: migrate
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
