@@ -62,10 +62,12 @@ TEMPLATES = [
 # USE_SQLITE is a dev/inner-loop convenience (Phase 2, before CloudNativePG
 # exists). Production and the cluster always use Postgres.
 if env.bool("USE_SQLITE", False):
+    # Path is overridable so a read-only-rootfs container can point it at a
+    # writable volume (e.g. /tmp/db.sqlite3). Local dev defaults to ./db.sqlite3.
     DATABASES = {
         "default": {
             "ENGINE": "django_prometheus.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": env.str("SQLITE_PATH", str(BASE_DIR / "db.sqlite3")),
         }
     }
 else:
