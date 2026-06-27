@@ -52,3 +52,46 @@ class OutboxEvent(models.Model):
 
 
 # --- Add your domain models below -------------------------------------------
+
+
+class ProcessedEvent(models.Model):
+    """Idempotency ledger for the consumers (at-least-once delivery)."""
+
+    event_id = models.CharField(max_length=64, primary_key=True)
+    topic = models.CharField(max_length=255)
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.topic}:{self.event_id}"
+
+
+class Order(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        CONFIRMED = "CONFIRMED"
+        PAYMENT_FAILED = "PAYMENT_FAILED"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default="USD")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.id} [{self.status}]"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
+    product_sku = models.CharField(max_length=64)
+    name = models.CharField(max_length=255)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    quantity = models.PositiveIntegerField()
+
+    def __str__(self) -> str:
+        return f"{self.product_sku} x{self.quantity}"

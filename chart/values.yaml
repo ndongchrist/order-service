@@ -34,6 +34,8 @@ config:
   LOG_LEVEL: "INFO"
   KAFKA_BOOTSTRAP_SERVERS: "ecommerce-kafka-bootstrap.kafka:9092"
   SCHEMA_REGISTRY_URL: "http://apicurio-registry.kafka:8080/apis/registry/v2"
+  CATALOG_URL: "http://catalog-service"     # sync stock-check
+  PAYMENT_URL: "http://payment-service"      # sync charge initiation
 
 # Existing Secret providing DJANGO_SECRET_KEY, POSTGRES_PASSWORD, etc.
 secretName: ""
@@ -84,10 +86,19 @@ postgres:
 migrations:
   enabled: true
 
-# Outbox relay Deployment (Phase 4+). Off until Kafka exists.
+# order produces order.created + order.confirmed → it needs the outbox relay.
 relay:
-  enabled: false
+  enabled: true
   replicaCount: 1
+
+# order-consumer applies payment results; notification-consumer notifies.
+consumers:
+  - name: order-consumer
+    command: ["python", "manage.py", "order_consumer"]
+    replicas: 1
+  - name: notification-consumer
+    command: ["python", "manage.py", "notification_consumer"]
+    replicas: 1
 
 podSecurityContext:
   runAsNonRoot: true

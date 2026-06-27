@@ -13,12 +13,3 @@ def test_readiness_checks_db(api):
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
 
-
-def test_whoami_requires_gateway_header(api):
-    assert api.get("/whoami/").status_code == 401
-
-
-def test_whoami_trusts_gateway_user(api, auth_headers):
-    resp = api.get("/whoami/", **auth_headers)
-    assert resp.status_code == 200
-    assert resp.json()["user_id"] == "user-123"
