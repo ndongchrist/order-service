@@ -11,10 +11,12 @@ spec:
   selector:
     matchLabels:
       {{- include "svc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
   template:
     metadata:
       labels:
         {{- include "svc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
       annotations:
         # Roll pods when config changes so new values take effect.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
