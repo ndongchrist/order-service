@@ -1,0 +1,9 @@
+{{ include "svc.fullname" . }} deployed (release {{ .Release.Name }}).
+
+In-cluster URL:
+  http://{{ include "svc.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Quick checks:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "svc.fullname" . }} 8080:{{ .Values.service.port }}
+  curl localhost:8080/health/        # liveness
+  curl localhost:8080/health/ready/  # readiness (DB)

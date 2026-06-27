@@ -1,0 +1,106 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # --- 1. Lint, type-check, test -------------------------------------------
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+      - name: ruff
+        run: uv run ruff check .
+      - name: mypy
+        run: uv run mypy . || true   # advisory until types are filled in
+      - name: pytest
+        env:
+          USE_SQLITE: "true"
+          DJANGO_SECRET_KEY: ci-secret
+        run: uv run pytest
+
+  # --- 2. Build, scan, push image tagged with the git SHA ------------------
+  build:
+    needs: quality
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: vars
+        run: echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image (load locally for scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha }}
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  # --- 3. GitOps: bump the image tag in the infra repo (never deploy here) -
+  bump-infra:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Derive service name
+        id: svc
+        run: echo "name=${GITHUB_REPOSITORY##*/}" >> "$GITHUB_OUTPUT"
+      - name: Checkout infra
+        uses: actions/checkout@v4
+        with:
+          repository: ndongchrist/infra
+          token: ${{ secrets.INFRA_TOKEN }}
+          path: infra
+      - name: Bump dev overlay image tag
+        working-directory: infra
+        run: |
+          set -e
+          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAG="${{ needs.build.outputs.sha }}"
+          cd "overlays/dev/${{ steps.svc.outputs.name }}"
+          kustomize edit set image "app=${IMG}:${TAG}"
+      - name: Commit & push
+        working-directory: infra
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "ci(${{ steps.svc.outputs.name }}): image ${{ needs.build.outputs.sha }}" || exit 0
+          git push

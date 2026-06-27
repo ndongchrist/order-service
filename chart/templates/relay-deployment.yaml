@@ -1,0 +1,42 @@
+{{- if .Values.relay.enabled }}
+# Transactional-outbox relay. Runs as its OWN Deployment (not in web pods) so
+# it scales and fails independently of the API.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "svc.fullname" . }}-relay
+  labels:
+    {{- include "svc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: outbox-relay
+spec:
+  replicas: {{ .Values.relay.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "svc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: outbox-relay
+  template:
+    metadata:
+      labels:
+        {{- include "svc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: outbox-relay
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: relay
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "manage.py", "relay_outbox"]
+          envFrom:
+            {{- include "svc.envFrom" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

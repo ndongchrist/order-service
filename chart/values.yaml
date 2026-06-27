@@ -1,0 +1,87 @@
+# Defaults are dev-safe. Per-environment overrides live in the `infra` repo
+# (Kustomize/Argo overlays), never here.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/ndongchrist/order-service
+  tag: latest          # CI overwrites this with the git SHA in the infra overlay
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+# Mandatory so the scheduler and HPA can do their jobs.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Non-secret config -> ConfigMap. Secrets come from a Sealed Secret named
+# `order-service-secrets` (see infra repo).
+config:
+  DJANGO_DEBUG: "false"
+  DJANGO_ALLOWED_HOSTS: "*"
+  USE_SQLITE: "true"        # dev/inner-loop only; infra prod overlay sets "false"
+  LOG_LEVEL: "INFO"
+  KAFKA_BOOTSTRAP_SERVERS: "ecommerce-kafka-bootstrap.kafka:9092"
+  SCHEMA_REGISTRY_URL: "http://apicurio-registry.kafka:8080/apis/registry/v2"
+
+# Existing Secret providing DJANGO_SECRET_KEY, POSTGRES_PASSWORD, etc.
+secretName: ""
+
+probes:
+  liveness:
+    path: /health/
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready/
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  startup:
+    path: /health/
+    periodSeconds: 5
+    failureThreshold: 30      # up to 150s for first boot + migrations
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+serviceMonitor:
+  enabled: true
+  path: /metrics
+  interval: 15s
+
+# DB migrations run as a pre-install/pre-upgrade Helm hook Job.
+migrations:
+  enabled: true
+
+# Outbox relay Deployment (Phase 4+). Off until Kafka exists.
+relay:
+  enabled: false
+  replicaCount: 1
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
