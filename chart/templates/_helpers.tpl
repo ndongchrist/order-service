@@ -31,3 +31,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     name: {{ .Values.secretName }}
 {{- end }}
 {{- end -}}
+
+{{/* DB connection env, sourced from the CloudNativePG-generated `<cluster>-app`
+     secret. Only rendered when postgres.enabled; overrides the ConfigMap's
+     USE_SQLITE so the same image runs SQLite in dev and Postgres in prod. */}}
+{{- define "svc.dbEnv" -}}
+- name: USE_SQLITE
+  value: "false"
+- name: POSTGRES_HOST
+  value: {{ include "svc.fullname" . }}-db-rw
+- name: POSTGRES_PORT
+  value: "5432"
+- name: POSTGRES_DB
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "svc.fullname" . }}-db-app
+      key: dbname
+- name: POSTGRES_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "svc.fullname" . }}-db-app
+      key: username
+- name: POSTGRES_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "svc.fullname" . }}-db-app
+      key: password
+{{- end -}}

@@ -29,6 +29,10 @@ spec:
           command: ["python", "manage.py", "relay_outbox"]
           envFrom:
             {{- include "svc.envFrom" . | nindent 12 }}
+          {{- if .Values.postgres.enabled }}
+          env:
+            {{- include "svc.dbEnv" . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:

@@ -63,6 +63,23 @@ serviceMonitor:
   path: /metrics
   interval: 15s
 
+# CloudNativePG Postgres-per-service. Off in the Tilt dev loop (SQLite); the
+# infra dev/prod overlays turn it on. When enabled, svc.dbEnv injects the
+# connection from the CNPG `<fullname>-db-app` secret and forces USE_SQLITE=false.
+postgres:
+  enabled: false
+  instances: 1
+  image: ghcr.io/cloudnative-pg/postgresql:16.4
+  storage: 256Mi
+  database: order
+  owner: order
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
 # DB migrations run as a pre-install/pre-upgrade Helm hook Job.
 migrations:
   enabled: true

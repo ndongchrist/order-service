@@ -30,6 +30,10 @@ spec:
               containerPort: {{ .Values.service.targetPort }}
           envFrom:
             {{- include "svc.envFrom" . | nindent 12 }}
+          {{- if .Values.postgres.enabled }}
+          env:
+            {{- include "svc.dbEnv" . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path }}

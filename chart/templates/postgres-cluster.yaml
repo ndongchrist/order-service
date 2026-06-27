@@ -1,0 +1,26 @@
+{{- if .Values.postgres.enabled }}
+# Database-per-service: each service owns a CloudNativePG Postgres Cluster.
+# CNPG generates a `<name>-app` secret (dbname/username/password) and `-rw`/`-ro`
+# Services. Dev = 1 instance; the infra prod overlay bumps instances + storage.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "svc.fullname" . }}-db
+  labels:
+    {{- include "svc.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.image }}
+  storage:
+    size: {{ .Values.postgres.storage }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.owner }}
+  resources:
+    requests:
+      cpu: {{ .Values.postgres.resources.requests.cpu }}
+      memory: {{ .Values.postgres.resources.requests.memory }}
+    limits:
+      memory: {{ .Values.postgres.resources.limits.memory }}
+{{- end }}
