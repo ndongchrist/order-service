@@ -90,12 +90,12 @@ jobs:
           path: infra
       - name: Bump dev overlay image tag
         working-directory: infra
+        env:
+          TAG: ${{ needs.build.outputs.sha }}
         run: |
           set -e
-          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          TAG="${{ needs.build.outputs.sha }}"
-          cd "overlays/dev/${{ steps.svc.outputs.name }}"
-          kustomize edit set image "app=${IMG}:${TAG}"
+          # yq is preinstalled on ubuntu-latest runners.
+          yq -i '.image.tag = strenv(TAG)' "apps/${{ steps.svc.outputs.name }}/values-dev.yaml"
       - name: Commit & push
         working-directory: infra
         run: |
