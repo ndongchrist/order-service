@@ -26,7 +26,7 @@ Handler = Callable[[dict, dict], None]
 def _headers_to_dict(raw) -> dict:
     out: dict[str, str] = {}
     for key, value in raw or []:
-        out[key] = value.decode() if isinstance(value, (bytes, bytearray)) else str(value)
+        out[key] = value.decode() if isinstance(value, bytes | bytearray) else str(value)
     return out
 
 
